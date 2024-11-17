@@ -119,7 +119,16 @@ index_studies <- function(data.dir, exclude = NULL){
     df$local_path <- data.unzipped
     df <- df[,!(names(df) == 'X')]
     df$start <- df$run_id %>% as.POSIXct(origin = "1970-01-01")
-    df
+    
+    # Add date and time columns ####
+    df$start_date <- as.Date(df$start, origin = "1970-01-01") # Convert to date format
+    df$start_time <- format(as.POSIXct(df$start, origin = "1970-01-01"), "%H:%M") # Extract time
+    
+    # Reorder columns to place date and time after local_id ####
+    first.cols <- c("local_id", "status", "start_date", "start_time")
+    column_order <- c(first.cols, setdiff(names(df), first.cols))
+    df <- df[, column_order]
+
 }
 
 dig <- function(top.dir) {

@@ -1,0 +1,18 @@
+## On NMR box (home)
+
+NMRBox should have singularity installed.
+
+# Get the latest docker image and build singularity
+
+	singularity pull docker://mtbls/safer-nmr:latest
+
+# Spin up singularity image and run R
+
+	singularity exec safer-nmr_latest.sif R
+
+# Run R commmands
+
+	library(SAFERnmr) # load SAFER functions
+	pipeline('/home/nmrbox/mjudge/Documents/safer/params/params_saferDemo.yaml')
+	
+
