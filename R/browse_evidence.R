@@ -11,11 +11,10 @@
 #' @importFrom magrittr %>%
 #' @importFrom stringr str_replace
 #' 
-#' @import shiny
-#' @import plotly
+#' @import plotly jsonlite shiny DT
 #' 
 #' @export
-browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.samples = NULL, clusterSamples = T){
+browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.samples = NULL, clusterSamples = T, clusterCompounds = T){
 #######################################################################################
   if (is.null(results.dir)) {
     results.dir <- getwd()
@@ -177,7 +176,7 @@ browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.
         if (nrow(scores.matrix) > 1){
           ref.order <- hclust(dist(scores.matrix))$order
         } else {
-          ref.order <- 1
+          ref.order <- ref.order
         }
           
       }
@@ -186,7 +185,7 @@ browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.
         if (ncol(scores.matrix) > 1){
           sample.order <- hclust(dist(t(scores.matrix)))$order
         } else {
-          sample.order <- 1
+          sample.order <- sample.order
         }
           
       }
@@ -245,6 +244,8 @@ ui <-
               plotOutput("stack.ref.feats"),
               
               sliderInput(inputId = 'vshift.slide', label = "vshift", min = 0, max = 5, value = 1, step = .05),
+              actionButton(inputId = "export_view", label = "Export Current View")
+
               # sliderInput(inputId = 'hshift.slide', "hshift", -.1, .1, 0.5, step = 0.001),
             )
     ),
@@ -272,13 +273,17 @@ ui <-
             ),
 
           # Sample scores and selection pane ####
-          
             fluidRow(
-              
               h3(textOutput("selectedRow_name")),
               
-              plotlyOutput("scatterScores")
+              # Divide the space into two columns
+              column(4, # Adjust width as needed (4/12 of the row for the table)
+                     DTOutput("saved_views_table")  # Add the table placeholder here
+              ),
               
+              column(8, # The remaining space for the scores plot
+                     plotlyOutput("scatterScores")
+              )
             )
     )
   )
@@ -806,6 +811,71 @@ server <- function(input, output, session) {
 
             })
 
+  ####### Export view stuff
+        observeEvent(input$export_view, {
+            req(values$selectedRow, values$selectedRange, values$selectedCols) # Ensure necessary selections are made
+          
+            # Get the current metabolite name and timestamp
+            metabolite_name <- refs$name[values$selectedRow]
+            timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+            
+            # Extract the current view data
+            export_data <- list(
+              metabolite = metabolite_name,
+              selected_range = values$selectedRange,
+              selected_samples = values$selectedCols,
+              refplot_xlim = values$refplot.xlim
+            )
+            
+            # Define the export file name
+            file_name <- paste0("export_", metabolite_name, "_", timestamp, ".json")
+            file_path <- file.path(results.dir, file_name)
+            
+            # Save the data to a JSON file
+            jsonlite::write_json(export_data, path = file_path)
+            
+            # Notify the user
+            showNotification(paste("Exported view to", file_name))
+      })
+        # List files in the results directory
+          observe({
+          saved_files <- list.files(results.dir, pattern = "export_.*\\.json", full.names = FALSE)
+          
+          # Create a data frame with file names and buttons
+          saved_views <- data.frame(
+            File = saved_files,
+            Action = sapply(saved_files, function(file) {
+              as.character(actionButton(
+                inputId = paste0("load_", gsub("[^a-zA-Z0-9]", "_", file)),
+                label = "Load",
+                onclick = paste0("Shiny.setInputValue('load_view', '", file, "');")
+              ))
+            }),
+            stringsAsFactors = FALSE
+          )
+          
+          # Render the table
+          output$saved_views_table <- renderDT({
+            datatable(saved_views, escape = FALSE, rownames = FALSE, options = list(dom = "t"))
+          })
+        })
+        # Handle button clicks
+          observeEvent(input$load_view, {
+            req(input$load_view)
+            
+            # Load the selected view file
+            file_path <- file.path(results.dir, input$load_view)
+            imported_data <- jsonlite::read_json(file_path)
+            
+            # Update reactive values
+            values$selectedRow <- which(refs$name == imported_data$metabolite)
+            values$selectedRange <- imported_data$selected_range
+            values$selectedCols <- imported_data$selected_samples
+            values$refplot.xlim <- imported_data$refplot_xlim
+            
+            showNotification(paste("Loaded view:", input$load_view))
+          })
+      
 }
 
 # Run app ####
