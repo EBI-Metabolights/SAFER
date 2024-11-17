@@ -812,31 +812,31 @@ server <- function(input, output, session) {
             })
 
   ####### Export view stuff
-        observeEvent(input$export_view, {
-            req(values$selectedRow, values$selectedRange, values$selectedCols) # Ensure necessary selections are made
-          
-            # Get the current metabolite name and timestamp
-            metabolite_name <- refs$name[values$selectedRow]
-            timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+          observeEvent(input$export_view, {
+              req(values$selectedRow, values$selectedRange, values$selectedCols) # Ensure necessary selections are made
             
-            # Extract the current view data
-            export_data <- list(
-              metabolite = metabolite_name,
-              selected_range = values$selectedRange,
-              selected_samples = values$selectedCols,
-              refplot_xlim = values$refplot.xlim
-            )
-            
-            # Define the export file name
-            file_name <- paste0("export_", metabolite_name, "_", timestamp, ".json")
-            file_path <- file.path(results.dir, file_name)
-            
-            # Save the data to a JSON file
-            jsonlite::write_json(export_data, path = file_path)
-            
-            # Notify the user
-            showNotification(paste("Exported view to", file_name))
-      })
+              # Get the current metabolite name and timestamp
+              metabolite_name <- refs$name[values$selectedRow]
+              timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+              
+              # Extract the current view data
+              export_data <- list(
+                metabolite = metabolite_name,
+                selected_range = values$selectedRange,
+                selected_samples = values$selectedCols,
+                refplot_xlim = values$refplot.xlim
+              )
+              
+              # Define the export file name
+              file_name <- paste0("export_", metabolite_name, "_", timestamp, ".json")
+              file_path <- file.path(results.dir, file_name)
+              
+              # Save the data to a JSON file
+              jsonlite::write_json(export_data, path = file_path)
+              
+              # Notify the user
+              showNotification(paste("Exported view to", file_name))
+        })
         # List files in the results directory
           observe({
           saved_files <- list.files(results.dir, pattern = "export_.*\\.json", full.names = FALSE)
@@ -873,9 +873,11 @@ server <- function(input, output, session) {
             values$selectedCols <- imported_data$selected_samples
             values$refplot.xlim <- imported_data$refplot_xlim
             
-            showNotification(paste("Loaded view:", input$load_view))
+            # Force plot updates by triggering dependent reactive values
+            # (This will happen automatically if the plots depend on these values)
+            
+            showNotification(paste("Loaded view:", input$load_view, "Data and plots updated!"))
           })
-      
 }
 
 # Run app ####
