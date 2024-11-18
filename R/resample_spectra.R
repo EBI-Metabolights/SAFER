@@ -26,6 +26,7 @@ resample_spectra <- function(xmat, ppm, npoints, cores = 1){
   }
   
   xl <- split(xmat, row(xmat))
+  row.names <- rownames(xmat)
   
   X.resampled <- mclapply(xl, function(spec)
     {
@@ -50,6 +51,8 @@ resample_spectra <- function(xmat, ppm, npoints, cores = 1){
     }, mc.cores = cores
   ) %>% do.call(rbind,.)
 
+  rownames(X.resampled) <- row.names
+  
   return(list(ppm = ppm.resampled,
               spectra = X.resampled))
 }
