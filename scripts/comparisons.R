@@ -5,8 +5,9 @@
 
 devtools::document('/Users/mjudge/Documents/GitHub/SAFERnmr')#1697793655
 tmpdir <- '/Users/mjudge/Documents/ftp_ebi/pipeline_runs_new/1709742511' # fits mtbls1
+tmpdir <- '/Users/mjudge/Documents/ftp_ebi/pipeline_runs_new/1731870877'
 
-smrf <- readRDS(paste0(tmpdir, "/smrf.RDS"))
+smrf <- readRDS(paste0(tmpdir, "/1731870877.caf.tsv"))
 head(smrf$match.info, 100) %>% .[c(1,2,3,8),c(1,2,4,8,10)] %>% rbind(tail(smrf$match.info, 1) %>% .[,c(1,2,4,8,10)]) %>% write.csv('matches.1709742511.csv', col.names = TRUE)
 
 cmpd = 'Citrate'
@@ -77,6 +78,15 @@ cmpd = 'Citrate'
 
 # do chenomx annotation
 
+  
+chenomx.annots <- read.table('/Users/mjudge/Edison_Lab@UGA Dropbox/Michael Judge/MJ_UGA_Root/Scheduling/safer_manuscript/data/chenomx comparison/mtbls1 annotation evidence/chenomx/scoring_noGUI.csv', header = TRUE, sep = ',')
+
 # do SAFER annotation
 
-# 
+
+  
+  
+  
+  
+  
+  

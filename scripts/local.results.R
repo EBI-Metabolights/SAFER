@@ -20,9 +20,10 @@ data.dir <- '/Users/mjudge/Documents/ftp_ebi/pipeline_runs_new/'
 ########### Runs by end time ######
 
   run.idx <- run.idx %>% filter(write_time >= '2024-09-23 15:00:00') %>% arrange(write_time)
-  i <- 4
+  i <- 1
   browse_evidence(run.idx$local_path[i], select.compounds = 'Citrate')
 
   
-  
+
+
 

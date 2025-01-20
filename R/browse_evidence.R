@@ -117,7 +117,8 @@ browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.
 
         # If select.compounds is a name, then convert to an index
           if (is.character(select.compounds)){
-            select.compound.inds <- grepl(pattern = select.compounds, rownames(scores.matrix)) %>% which
+            select.compound.inds <- match(select.compounds, rownames(scores.matrix))
+            # select.compound.inds <- grepl(pattern = select.compounds, rownames(scores.matrix)) %>% which
           } else {
             select.compound.inds <- select.compounds
           }
@@ -130,14 +131,15 @@ browse_evidence <- function(results.dir = NULL, select.compounds = NULL, select.
           
           # If select.samples is a sample name, then convert to an index
           if (is.character(select.samples)){
-            select.sample.inds <- grepl(pattern = select.samples, colnames(scores.matrix)) %>% which
+            select.sample.inds <- match(select.samples, colnames(scores.matrix))
+            # select.sample.inds <- grepl(pattern = select.samples, colnames(scores.matrix)) %>% which
           } else {
             select.sample.inds <- select.samples
           }
           
           keepsamples <- intersect(keepsamples, select.sample.inds)
           if (length(keepsamples) == 0){
-            error('The selected sample did not have any scores > ', score.cutoff, '. Quitting.')
+            error('The selected samples did not have any scores > ', score.cutoff, '. Quitting.')
           }
           
         refs.used <- keeprefs
