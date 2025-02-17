@@ -16,29 +16,32 @@ if ppm.shape[0] != spectra.shape[1]:
     spectra = spectra.T
 
 # Smart downsampling function
-def downsample_spectra(ppm, spectra, num_points=3000):
+def downsample_spectra(ppm, spectra, num_points=1000):
     """Dynamically reduces resolution based on zoom level."""
     factor = max(len(ppm) // num_points, 1)
     return ppm[::factor], spectra[:, ::factor]
 
 # Default full view (downsampled for performance)
-ppm_ds, spectra_ds = downsample_spectra(ppm, spectra, num_points=3000)
+ppm_ds, spectra_ds = downsample_spectra(ppm, spectra, num_points=1000)
 
 # Create Dash app
 app = dash.Dash(__name__)
 
 # Initial plot function
-def create_initial_figure(dragmode="zoom", ppm_min=None, ppm_max=None):
+def create_initial_figure(dragmode="zoom", ppm_min=None, ppm_max=None, fill_active=False):
     """Plots all spectra using WebGL (scattergl) for performance while keeping zoom level."""
     
     # Keep current zoom range if provided
     x_range = [ppm_min, ppm_max] if ppm_min and ppm_max else [ppm.min(), ppm.max()]
     
+    fill_style = "tozeroy" if fill_active else None
+
     traces = [
         go.Scattergl(x=ppm_ds, y=spectra_ds[i, :], 
                      mode="lines", 
-                     line=dict(width=1,
-                               color="gray"), 
+                     fill=fill_style,  # ✅ Apply fill if active
+                     fillcolor="white",  # ✅ Solid white fill
+                     line=dict(width=1, color="gray"), 
                      hoverinfo="none")
         for i in range(len(spectra_ds))  # ✅ Show all spectra
     ]
@@ -62,76 +65,71 @@ app.layout = html.Div([
                 id="spectra-plot",
                 config={"scrollZoom": True},
                 figure=create_initial_figure(),
-                style={"width": "100%", "height": "100%"}  # ✅ Allow full height scaling
+                style={"width": "100%", "height": "100%"}
             )
         ],
         id="resizable-div",
         style={
             "width": "100%",
-            "height": "600px",  # Default height, but will expand
-            "resize": "vertical",  # ✅ Allows vertical resizing
-            "overflow": "hidden",  # ✅ Ensures plot resizes properly
-            "border": "1px solid #ccc",  # Optional, for visibility
+            "height": "600px",
+            "resize": "vertical",
+            "overflow": "hidden",
+            "border": "1px solid #ccc",
             "padding": "5px",
-            "min-height": "400px",  # ✅ Prevents collapsing too much
-            "max-height": "1200px",  # ✅ Set an upper bound if needed
+            "min-height": "400px",
+            "max-height": "1200px",
         },
     ),
     html.Button("Switch to Selection Mode", id="toggle-mode-btn", n_clicks=0),
+    html.Button("Toggle Fill", id="fill-toggle-btn", n_clicks=0),
+    
     dcc.Store(id="interaction-mode", data="zoom"),
     dcc.Store(id="zoom-range", data={"ppm_min": float(ppm.min()), "ppm_max": float(ppm.max())}),
+    dcc.Store(id="fill-active", data=False),  # Store fill state
 
     html.Label("Stack Offset (Linear)"),
-    dcc.Slider(
-        id="stacking-slider",
-        min=0, max=50, step=1,
-        value=0,  # Default offset value
-        marks={i: str(i) for i in range(0, 55, 5)},
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
+    dcc.Slider(id="stacking-slider", min=0, max=50, step=1, value=0,
+               marks={i: str(i) for i in range(0, 55, 5)}, 
+               tooltip={"placement": "bottom", "always_visible": True}),
 
     html.Label("Stack Scaling Factor (Log)"),
-    dcc.Slider(
-        id="stack-scale-slider",
-        min=0, max=10, step=1,
-        value=4,  # Default to 10^4
-        marks={i: f"10^{i}" for i in range(0, 10)},
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
+    dcc.Slider(id="stack-scale-slider", min=0, max=10, step=1, value=4,
+               marks={i: f"10^{i}" for i in range(0, 10)},
+               tooltip={"placement": "bottom", "always_visible": True}),
 
     html.Label("Spectrum Height Scale"),
-    dcc.Slider(
-        id="height-scale-slider",
-        min=-4, max=4, step=0.25,
-        value=0,  # Default to normal height
-        marks={i: f"10^{i}" for i in range(-1, 3)},
-        tooltip={"placement": "bottom", "always_visible": True}
-    ),
+    dcc.Slider(id="height-scale-slider", min=-4, max=4, step=0.25, value=0,
+               marks={i: f"10^{i}" for i in range(-1, 3)},
+               tooltip={"placement": "bottom", "always_visible": True}),
 
-    html.Div(id="selected-region")
+    html.Div(id="selected-region"),
+    dcc.Interval(id="debounce-interval", interval=500, n_intervals=0)  # 500ms debounce
 ])
 
-# **Unified Callback** (Handles Zooming, Panning, and Mode Toggle)
+# **Unified Callback** (Handles Zooming, Panning, Mode Toggle, Fill, and Scaling)
 @app.callback(
     Output("spectra-plot", "figure"),
     Output("toggle-mode-btn", "children"),
     Output("interaction-mode", "data"),
     Output("zoom-range", "data"),
+    Output("fill-active", "data"),  # Track fill state
     Input("toggle-mode-btn", "n_clicks"),
+    Input("fill-toggle-btn", "n_clicks"),  # Fill button input
     Input("spectra-plot", "relayoutData"),
+    Input("spectra-plot", "selectedData"), # forces update_figure after selection
     Input("stacking-slider", "value"),
     Input("stack-scale-slider", "value"),
     Input("height-scale-slider", "value"),
     State("spectra-plot", "figure"),
     State("interaction-mode", "data"),
     State("zoom-range", "data"),
+    State("fill-active", "data"),
     prevent_initial_call=True
 )
 
+def update_plot(n_clicks, fill_n_clicks, relayoutData, selectedData, stack_offset, stack_scale, height_scale, figure, mode, zoom_data, fill_active):
+    """Handles zooming, selection mode toggle, stacking, and optionally fills spectra."""
 
-def update_plot(n_clicks, relayoutData, stack_offset, stack_scale, height_scale, figure, mode, zoom_data):
-    """Handles zooming, selection mode toggle, stacking, and intensity scaling (only within view)."""
-    
     ctx = dash.callback_context
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
     ppm_min, ppm_max = zoom_data["ppm_min"], zoom_data["ppm_max"]
@@ -141,14 +139,18 @@ def update_plot(n_clicks, relayoutData, stack_offset, stack_scale, height_scale,
         new_mode = "select" if mode == "zoom" else "zoom"
         new_button_text = "Switch to Zoom Mode" if new_mode == "select" else "Switch to Selection Mode"
         figure["layout"]["dragmode"] = new_mode
-        return figure, new_button_text, new_mode, zoom_data
+        return figure, new_button_text, new_mode, zoom_data, fill_active
 
-    # Step 2: Handle Zoom Updates
+    # Step 2: Handle Fill Toggle
+    if triggered_id == "fill-toggle-btn":
+        fill_active = not fill_active  # Toggle state
+
+    # Step 3: Handle Zoom Updates
     if relayoutData is None or "autosize" in relayoutData:
-        return dash.no_update, dash.no_update, dash.no_update, zoom_data  
+        return dash.no_update, dash.no_update, dash.no_update, zoom_data, fill_active  
 
     if "xaxis.autorange" in relayoutData:
-        return create_initial_figure(dragmode=mode), dash.no_update, mode, {"ppm_min": ppm.min(), "ppm_max": ppm.max()}
+        return create_initial_figure(dragmode=mode, fill_active=fill_active), dash.no_update, mode, {"ppm_min": ppm.min(), "ppm_max": ppm.max()}, fill_active
 
     if "xaxis.range" in relayoutData:
         ppm_min, ppm_max = relayoutData["xaxis.range"]
@@ -161,25 +163,55 @@ def update_plot(n_clicks, relayoutData, stack_offset, stack_scale, height_scale,
 
     high_res = (ppm_max - ppm_min) < (ppm.max() - ppm.min()) / 3
     if not high_res:
-        ppm_zoom, spectra_zoom = downsample_spectra(ppm_zoom, spectra_zoom, num_points=3000)
+        ppm_zoom, spectra_zoom = downsample_spectra(ppm_zoom, spectra_zoom, num_points=1000)
 
     # Compute Final Stacking Offset
-    scaling_factor = 10 ** stack_scale  # Exponential scaling
+    scaling_factor = 10 ** stack_scale
     adjusted_offset = stack_offset * scaling_factor
 
     # Apply Stacking & Height Scaling **Only to Visible Data**
     num_spectra = len(spectra_zoom)
     stacked_spectra = [(spectra_zoom[i, :] * 10**height_scale) + (i * adjusted_offset) for i in range(num_spectra)]
 
-    # Update Figure Data Without Resetting
+    # Ensure we are working with the correct stacking order
+    stacked_spectra_filled = stacked_spectra[::-1] if fill_active else stacked_spectra
+
+    fill_style = "tozeroy" if fill_active else None
+
     figure["data"] = [
-        go.Scattergl(x=ppm_zoom, y=stacked_spectra[i], mode="lines", line=dict(width=1, color="gray"), hoverinfo="none")
-        for i in range(num_spectra)
+        go.Scattergl(
+            x=ppm_zoom, 
+            y=stacked_spectra_filled[i],  # ✅ Use the temporary reversed copy only if fill is active
+            mode="lines", 
+            fill="tozeroy" if fill_active else None, 
+            fillcolor="white" if fill_active else None, 
+            line=dict(width=1, color="gray"), 
+            hoverinfo="none"
+        ) for i in range(num_spectra)
     ]
-    figure["layout"]["xaxis"]["range"] = [ppm_min, ppm_max]
+    return figure, dash.no_update, mode, {"ppm_min": ppm_min, "ppm_max": ppm_max}, fill_active
 
-    return figure, dash.no_update, mode, {"ppm_min": ppm_min, "ppm_max": ppm_max}
+@app.callback(
+    Output("selected-region", "children"),  # Updates the text in the UI
+    Input("spectra-plot", "selectedData"),  # Triggers when selection happens
+    prevent_initial_call=True  # Prevents firing when app first loads
+)
+def display_selected_region(selectedData):
+    """Handles region selection and prints the selected PPM & intensity range."""
+    if not selectedData or "range" not in selectedData:
+        return "No region selected"
+    
+    # Extract selection box coordinates
+    ppm_range = selectedData["range"]["x"]  # Chemical shift (ppm)
+    intensity_range = selectedData["range"]["y"]  # Intensity
+    
+    # Print to console for debugging
+    print(f"🔹 Selected PPM Range: {ppm_range}")
+    print(f"🔹 Selected Intensity Range: {intensity_range}")
 
+    # Return as UI text
+    return f"🔹 Selected PPM: {ppm_range[0]:.4f} to {ppm_range[1]:.4f}, " \
+           f"Intensity: {intensity_range[0]:.2f} to {intensity_range[1]:.2f}"
 
 # Run the app
 if __name__ == "__main__":
