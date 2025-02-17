@@ -127,6 +127,8 @@ app.layout = html.Div([
     State("zoom-range", "data"),
     prevent_initial_call=True
 )
+
+
 def update_plot(n_clicks, relayoutData, stack_offset, stack_scale, height_scale, figure, mode, zoom_data):
     """Handles zooming, selection mode toggle, stacking, and intensity scaling (only within view)."""
     
@@ -177,6 +179,7 @@ def update_plot(n_clicks, relayoutData, stack_offset, stack_scale, height_scale,
     figure["layout"]["xaxis"]["range"] = [ppm_min, ppm_max]
 
     return figure, dash.no_update, mode, {"ppm_min": ppm_min, "ppm_max": ppm_max}
+
 
 # Run the app
 if __name__ == "__main__":
