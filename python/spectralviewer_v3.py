@@ -32,7 +32,7 @@ def create_initial_figure():
     """Creates a full-range figure for first load."""
     traces = [
         go.Scattergl(x=ppm_ds, y=spectra_ds[i, :], mode="lines", line=dict(width=1))
-        for i in range(len(spectra_ds))  # Adjust if needed
+        for i in range(len(spectra_ds))
     ]
     return {
         "data": traces,
@@ -50,76 +50,75 @@ def create_initial_figure():
 
 # App layout
 app.layout = html.Div([
-    dcc.Graph(id="spectra-plot", config={'scrollZoom': True, 'modeBarButtonsToAdd': ['select2d']}, 
-              figure=create_initial_figure()),  #  Preload plot
-    dcc.Store(id="zoom-range", data={"ppm_min": float(ppm.min()), "ppm_max": float(ppm.max())}),  # Store zoom range
-    dcc.Store(id="selected-region-data"), # display the selected region
-    html.Div(id="selected-region") # display the selected region
+    dcc.Graph(
+        id="spectra-plot", 
+        config={'scrollZoom': True, 'modeBarButtonsToAdd': ['select2d']},  # ✅ Ensures Box Select button appears
+        figure=create_initial_figure()
+    ),
+    dcc.Store(id="zoom-range", data={"ppm_min": float(ppm.min()), "ppm_max": float(ppm.max())}),  # ✅ Preserve zoom
+    html.Div(id="selected-region")  # ✅ Display selected region details
 ])
 
 @app.callback(
     Output("spectra-plot", "figure"),
     Output("zoom-range", "data"),  # Preserve zoom range across updates
-    Input("spectra-plot", "relayoutData"),  # Detect zoom changes
-    State("zoom-range", "data"),  # Get previous zoom range
-    prevent_initial_call=True  #  Prevents unnecessary first call
+    Input("spectra-plot", "relayoutData"),  # ✅ Detect zoom changes
+    State("zoom-range", "data"),  # ✅ Get previous zoom range
+    prevent_initial_call=True
 )
 def update_plot(relayoutData, zoom_data):
-    """Adjusts resolution dynamically based on zoom level while preserving view."""
+    """Handles zoom updates while preserving relayout functionality."""
 
-    #  Ignore `autosize` events
+    # ✅ Ignore autosize events (prevents unwanted resets)
     if relayoutData is None or "autosize" in relayoutData:
-        # print("Ignoring autosize event...")
-        return dash.no_update, zoom_data  # Prevents reset
+        return dash.no_update, zoom_data
 
-    #  Handle Double-Click Reset (autorange=True)
+    # ✅ Handle Double-Click Reset
     if "xaxis.autorange" in relayoutData:
-        # print("Double-click detected: Resetting zoom to full view...")
-        return create_initial_figure(), {"ppm_min": ppm.min(), "ppm_max": ppm.max()}  #  Reset to full range
+        return create_initial_figure(), {"ppm_min": ppm.min(), "ppm_max": ppm.max()}
 
-    #  Extract new zoom range, handling different key formats
+    # ✅ Extract zoom ranges
+    ppm_min, ppm_max = zoom_data["ppm_min"], zoom_data["ppm_max"]
+
     if "xaxis.range" in relayoutData:
         ppm_min, ppm_max = relayoutData["xaxis.range"]
     elif "xaxis.range[0]" in relayoutData and "xaxis.range[1]" in relayoutData:
         ppm_min, ppm_max = relayoutData["xaxis.range[0]"], relayoutData["xaxis.range[1]"]
-    else:
-        ppm_min, ppm_max = zoom_data["ppm_min"], zoom_data["ppm_max"]
 
-    #  Mask data within the zoom range
+    # ✅ Mask data within the zoom range
     mask = (ppm >= ppm_min) & (ppm <= ppm_max)
-
-    #  Downsample the visible portion
     ppm_zoom, spectra_zoom = downsample_spectra(ppm[mask], spectra[:, mask], num_points=3000)
 
-    #  Create WebGL traces
+    # ✅ Create WebGL traces
     traces = [
         go.Scattergl(x=ppm_zoom, y=spectra_zoom[i, :], mode="lines", line=dict(width=1)) 
-        for i in range(len(spectra_zoom))  # Adjust if needed
+        for i in range(len(spectra_zoom))
     ]
 
-    #  Return updated plot + updated zoom range
+    # ✅ Return updated plot + updated zoom range
     return {
         "data": traces,
         "layout": {
             "title": "NMR Spectra Viewer",
             "xaxis": {
                 "title": "Chemical Shift (ppm)",
-                "range": [ppm_min, ppm_max],  #  Explicitly set zoom range
-                "autorange": False  #  Prevents Plotly from resetting
+                "range": [ppm_min, ppm_max],  # ✅ Explicitly set zoom range
+                "autorange": False  # ✅ Prevents Plotly from resetting
             },
             "yaxis": {"title": "Intensity"},
             "showlegend": False
         }
-    }, {"ppm_min": ppm_min, "ppm_max": ppm_max}  #  Store zoom range persistently
+    }, {"ppm_min": ppm_min, "ppm_max": ppm_max}
 
 @app.callback(
     Output("selected-region", "children"),
     Input("spectra-plot", "selectedData")
 )
 def display_selected_region(selectedData):
-    """Handles region selection and displays the selected region."""
+    """Handles region selection and prints the selected region."""
     if not selectedData or "range" not in selectedData:
         return "No region selected"
+    
     ppm_range = selectedData["range"]["x"]
     intensity_range = selectedData["range"]["y"]
 
