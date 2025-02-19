@@ -1,0 +1,59 @@
+dirs :
+ temp : ~/Downloads/
+ # where files will be stored on runtime (relative to working)
+ lib : ../gissmo_ref
+
+study :
+ id : MTBLS1
+ spectrometer.frequency : 700 # MHz of the dataset
+
+files :
+ spectral.matrix :   ~/Downloads/MTBLS1_nmrML_noesypr1d_spectralMatrix.RDS
+ lib.data : ../gissmo_ref/data.list_700MHz.RDS
+ lib.info : ../gissmo_ref/gissmo_lib.info.RDS
+
+corrpockets :
+ half.window : .03 # 1/2 initial tolerance for resonance pairs; this is in PPM
+ noise.percentile : .95 # type of noise cutoff; higher is looser (more noise)
+ only.region.between : NULL # only run corrpocketpairs on this region (e.g. c(0,10)) - not necessary
+ rcutoff : .8 # don't consider corrpocket peaks whose maximum is < this
+
+storm :
+ correlation.r.cutoff : 0.8 # correlation cutoff (for both subset and profile steps)
+ q : .01 # STORM adjusted pvalue 
+ b : 1.5 # STORM b parameter - increasing opens up the search to a wider area. Units: peak widths
+ number.of.plots : 250
+
+tina :
+ bounds : !expr c(-1, 11)
+ min.subset : 5
+ prom.ratio : 0.3
+ nfeats : 25000
+ plots :
+  max.plots : 600
+  filtered.out : TRUE
+  filtered.features : TRUE
+  cleaned.clusters : TRUE
+
+
+matching :
+ cluster.profile : representative.feature # or weighted.mean
+ ref.sig.SD.cutoff : 0.01 # fraction of signal standard deviation (signal cutoff)
+ max.hits : 5  # number of convolution (cross-correlation) maxima to consider for each pairwise feature - ref spectrum pair
+ r.thresh : 0.8 # pearson correlation coefficient (r) cutoff for cross-correlations
+ p.thresh : 0.01 # p-value cutoff for cross-correlations
+ filtering :
+  res.area.threshold : 0.25
+  ppm.tol : 0.1
+
+par :
+ ncores : 4  # number of cores to use for parallelized matching; could set to: !expr parallel:detectCores() - 1
+ type : FORK  # what type of parallel process ("FORK" or "PSOCK"; see parallel::makeCluster documentation). Most parallel operations have now been converted to mclapply, so this primarily affects the matching loops.
+
+galaxy:
+  enabled: FALSE
+
+debug:
+  enabled: FALSE # this controls whether or not debug params are considered. 
+  throttle_features: 100 # limit number of features used in matching (to save time)
+  all.outputs: TRUE # save outputs from each step (lots of duplicated data)

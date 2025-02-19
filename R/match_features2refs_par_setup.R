@@ -161,10 +161,13 @@ match_features2refs_par_setup <- function(pars) {
         if (!is.null(lib.data)){
              
             # Process the data for the dataset: ####
+              reg <- pars$corrpockets$only.region.between
+              ppm.reg <- c(min(reg) - pars$matching$filtering$ppm.tol, max(reg) + pars$matching$filtering$ppm.tol)
               message(" - interpolating ref data to study ppm axis...\n\n")
               lib.data.processed <- prepRefs_for_dataset(lib.data,
                                                          ppm.dataset = ppm,
                                                          ref.sig.SD.cutoff = pars$matching$ref.sig.SD.cutoff,
+                                                         ppm.range = pars$corrpockets$only.region.between,
                                                          n.cores = pars$par$ncores
               )
             

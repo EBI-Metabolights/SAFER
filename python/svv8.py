@@ -103,7 +103,15 @@ app.layout = html.Div([
                tooltip={"placement": "bottom", "always_visible": True}),
 
     html.Div(id="selected-region"),
-    dcc.Interval(id="debounce-interval", interval=500, n_intervals=0)  # 500ms debounce
+    dcc.Interval(id="debounce-interval", interval=500, n_intervals=0),  # 500ms debounce
+
+    html.Label("Resolution (Number of Points)"),
+    dcc.Slider(
+        id="resolution-slider",
+        min=100, max=5000, step=100, value=1000,  # Default: 1000 points
+        marks={i: str(i) for i in range(100, 5100, 1000)},
+        tooltip={"placement": "bottom", "always_visible": True}
+    ),
 ])
 
 # **Unified Callback** (Handles Zooming, Panning, Mode Toggle, Fill, and Scaling)
@@ -112,22 +120,22 @@ app.layout = html.Div([
     Output("toggle-mode-btn", "children"),
     Output("interaction-mode", "data"),
     Output("zoom-range", "data"),
-    Output("fill-active", "data"),  # Track fill state
+    Output("fill-active", "data"),
     Input("toggle-mode-btn", "n_clicks"),
-    Input("fill-toggle-btn", "n_clicks"),  # Fill button input
+    Input("fill-toggle-btn", "n_clicks"),
     Input("spectra-plot", "relayoutData"),
-    Input("spectra-plot", "selectedData"), # forces update_figure after selection
+    Input("spectra-plot", "selectedData"),
     Input("stacking-slider", "value"),
     Input("stack-scale-slider", "value"),
     Input("height-scale-slider", "value"),
+    Input("resolution-slider", "value"),  # ✅ New slider input
     State("spectra-plot", "figure"),
     State("interaction-mode", "data"),
     State("zoom-range", "data"),
     State("fill-active", "data"),
     prevent_initial_call=True
 )
-
-def update_plot(n_clicks, fill_n_clicks, relayoutData, selectedData, stack_offset, stack_scale, height_scale, figure, mode, zoom_data, fill_active):
+def update_plot(n_clicks, fill_n_clicks, relayoutData, selectedData, stack_offset, stack_scale, height_scale, target_points, figure, mode, zoom_data, fill_active):
     """Handles zooming, selection mode toggle, stacking, and optionally fills spectra."""
 
     ctx = dash.callback_context
@@ -161,9 +169,11 @@ def update_plot(n_clicks, fill_n_clicks, relayoutData, selectedData, stack_offse
     mask = (ppm >= ppm_min) & (ppm <= ppm_max)
     ppm_zoom, spectra_zoom = ppm[mask], spectra[:, mask]
 
-    high_res = (ppm_max - ppm_min) < (ppm.max() - ppm.min()) / 3
-    if not high_res:
-        ppm_zoom, spectra_zoom = downsample_spectra(ppm_zoom, spectra_zoom, num_points=1000)
+    # Use the slider value for resolution
+    if target_points > len(ppm_zoom):
+        target_points = len(ppm_zoom)  # Prevents errors if zoomed into very small region
+
+    ppm_zoom, spectra_zoom = adaptive_downsample(ppm_zoom, spectra_zoom, target_points=target_points, feature_threshold=0.001)
 
     # Compute Final Stacking Offset
     scaling_factor = 10 ** stack_scale
@@ -213,6 +223,39 @@ def display_selected_region(selectedData):
     return f"🔹 Selected PPM: {ppm_range[0]:.4f} to {ppm_range[1]:.4f}, " \
            f"Intensity: {intensity_range[0]:.2f} to {intensity_range[1]:.2f}"
 
+import numpy as np
+
+def adaptive_downsample(ppm, spectra, target_points=500, feature_threshold=0.001):
+    """
+    Downsamples the spectra while preserving peaks and valleys.
+    
+    - Uses second derivative to detect sharp spectral features.
+    - Retains more points in peak/trough regions.
+    - Dynamically adjusts the resolution based on zoom level.
+    """
+
+    num_points = len(ppm)
+    if num_points <= target_points:  
+        return ppm, spectra  # If already under limit, return as is
+
+    # Compute second derivative (curvature measure)
+    curvature = np.abs(np.gradient(np.gradient(spectra, axis=1), axis=1))
+
+    # Normalize curvature across the spectrum
+    norm_curvature = curvature / np.max(curvature, axis=1, keepdims=True)
+
+    # Define importance scores (higher score = more critical to keep)
+    importance = norm_curvature > feature_threshold
+
+    # Ensure we always keep endpoints
+    importance[:, [0, -1]] = True  
+
+    # Adaptive sampling: Keep high-importance points, decimate low-importance regions
+    selected_indices = np.where(np.any(importance, axis=0))[0]
+    if len(selected_indices) > target_points:
+        selected_indices = np.linspace(0, len(selected_indices) - 1, target_points, dtype=int)
+
+    return ppm[selected_indices], spectra[:, selected_indices]
 
 # Run the app
 if __name__ == "__main__":

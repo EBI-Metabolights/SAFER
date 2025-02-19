@@ -16,6 +16,7 @@
 #' @param data.list a list of reference spectra, where each element of the list is a list containing the fields "tag", "ref.name", "compound.name", "ppm", and "data"
 #' @param ppm.dataset the ppm axis of the dataset to which the reference spectra will be matched
 #' @param ref.sig.SD.cutoff the cutoff for reference spectra signal, expressed as a fraction of the standard deviation
+#' @param ppm.range the range of ppms to include
 #'
 #' @return a list of processed reference spectra, where each element of the list is a list containing the fields "tag", "ref.name", "compound.name", "ppm", "data", and "mapped". The "mapped" field contains a list with the fields "ppm", "data", "sig.cutoff", and "sd.cutoff"
 #'
@@ -29,13 +30,19 @@
 prepRefs_for_dataset <- function(data.list,                 # list of gissmo (or other) ref spectra and ppm axes
                                  ppm.dataset,                       # ppm axis of dataset that will be matched
                                  ref.sig.SD.cutoff = 0.01,  # cutoff for ref spectra signal (fraction of SD)
+                                 ppm.range = NULL,
                                  n.cores = 1)               # this can be parallelized
   {
   
-    
     # For each ref, process for this matching ####
-      ppm <- ppm.dataset
-      ref.sig.SD.cutoff <- 0.01
+      ppm.full <- ppm.dataset
+      # ref.sig.SD.cutoff <- 0.01
+      
+      if (is.null(ppm.range)){
+        ppm.range <- c(min(ppm.full, na.rm=TRUE), max(ppm.full, na.rm=TRUE))
+      }
+      
+      ppm <- vectInds(ppm.range, ppm.full) %>% fillbetween %>% ppm.full[.]
       
       data.list.processed <- 
           # pblapply(data.list, function(ref.spec)
@@ -46,14 +53,17 @@ prepRefs_for_dataset <- function(data.list,                 # list of gissmo (or
               # Linear interpolation to dataset ppm axis ####
                 # ref.spec <- data.list[[1]]
                 #  simplePlot(ref.spec$data, xvect = ref.spec$ppm)
-
+                
                 ref.int <- approx(ref.spec$ppm, ref.spec$data, 
                                    ppm, # get values for these ppms (can be selective, or if goes oob, then NA)
                                    method="linear", rule=1, f=0)
+                
+                # simplePlot(ref.data, xvect = ref.ppm)
                 ref.ppm <- ref.int$x
                 ref.data <- ref.int$y - min(ref.int$y, na.rm = TRUE)
-                # simplePlot(ref.data, xvect = ref.ppm)
-                
+                if (!any(ref.data > ref.sig.SD.cutoff)){
+                  return(NULL)
+                }
               # # If not in the original ppm range, interpolation makes no sense. 
               # # Replace with zeros.
               #   ppm.in.ref <- ref.spec$ppm %>% range %>% vectInds(., ref.ppm) %>% fillbetween
@@ -97,6 +107,7 @@ prepRefs_for_dataset <- function(data.list,                 # list of gissmo (or
             }, mc.cores = n.cores
           )
       
+          data.list.processed <- lapply(data.list.processed, function(x) !is.null(x)) %>% unlist %>% data.list.processed[.]
       # ref.mat <- lapply(data.list.processed, function(x) x$mapped$data) %>% do.call(rbind, .)
         # simplePlot(ref.mat)
       # lapply(data.list.processed, function(x) length(x$mapped$data.compressed) == 1) %>% unlist %>% any

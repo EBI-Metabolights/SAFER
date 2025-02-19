@@ -15,6 +15,7 @@ prepRefs_for_dataset(
   data.list,
   ppm.dataset,
   ref.sig.SD.cutoff = 0.01,
+  ppm.range = NULL,
   n.cores = 1
 )
 }
@@ -24,6 +25,8 @@ prepRefs_for_dataset(
 \item{ppm.dataset}{the ppm axis of the dataset to which the reference spectra will be matched}
 
 \item{ref.sig.SD.cutoff}{the cutoff for reference spectra signal, expressed as a fraction of the standard deviation}
+
+\item{ppm.range}{the range of ppms to include}
 }
 \value{
 a list of processed reference spectra, where each element of the list is a list containing the fields "tag", "ref.name", "compound.name", "ppm", "data", and "mapped". The "mapped" field contains a list with the fields "ppm", "data", "sig.cutoff", and "sd.cutoff"
